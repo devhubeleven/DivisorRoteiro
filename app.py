@@ -7,7 +7,6 @@ import importlib
 import json
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 import segmentador as modulo_segmentador
 
@@ -485,7 +484,12 @@ def botao_copiar(
         }});
     </script>
     """
-    components.html(componentes, height=42, scrolling=False)
+    st.iframe(
+        componentes,
+        width="stretch" if largura_total else "content",
+        height=42,
+        tab_index=-1,
+    )
 
 
 def cards_estatisticas(estatisticas: dict[str, object]) -> None:
@@ -560,7 +564,7 @@ with st.container(border=True):
             key="roteiro",
             label_visibility="collapsed",
         )
-    dividir = st.button("Dividir roteiro", type="primary", use_container_width=True)
+    dividir = st.button("Dividir roteiro", type="primary", width="stretch")
 
 if dividir:
     try:
@@ -577,14 +581,14 @@ if "resultado" in st.session_state:
     conteudo_txt = segmentador.exportar_txt().decode("utf-8")
     cards_estatisticas(estatisticas)
 
-    downloads_coluna, prompts_coluna = st.columns([1, 1.18], gap="medium", vertical_alignment="stretch")
+    downloads_coluna, prompts_coluna = st.columns([1, 1.18], gap="medium")
     with downloads_coluna:
         with st.container(border=True):
             st.markdown("<div class='section-title-row'><h2>Downloads</h2></div>", unsafe_allow_html=True)
             botoes = st.columns(3, gap="small")
-            botoes[0].download_button("▧  Baixar TXT", segmentador.exportar_txt(), "prompts.txt", "text/plain", use_container_width=True)
-            botoes[1].download_button("▧  Baixar Markdown", segmentador.exportar_markdown(), "prompts.md", "text/markdown", use_container_width=True)
-            botoes[2].download_button("▦  Baixar CSV", segmentador.exportar_csv(), "prompts.csv", "text/csv", use_container_width=True)
+            botoes[0].download_button("▧  Baixar TXT", segmentador.exportar_txt(), "prompts.txt", "text/plain", width="stretch")
+            botoes[1].download_button("▧  Baixar Markdown", segmentador.exportar_markdown(), "prompts.md", "text/markdown", width="stretch")
+            botoes[2].download_button("▦  Baixar CSV", segmentador.exportar_csv(), "prompts.csv", "text/csv", width="stretch")
 
     with prompts_coluna:
         with st.container(border=True):
