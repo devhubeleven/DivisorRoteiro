@@ -24,6 +24,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+if "tema_interface" not in st.session_state:
+    st.session_state["tema_interface"] = "☀"
+
+coluna_tema_vazia, coluna_tema = st.columns([10, 1])
+with coluna_tema:
+    tema_selecionado = st.radio(
+        "Tema",
+        ("☀", "🌙"),
+        key="tema_interface",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+
+tema_escuro = tema_selecionado == "🌙"
+
 st.markdown(
     """
     <style>
@@ -59,18 +74,18 @@ st.markdown(
         .hero__eyebrow {
             display: inline-flex;
             align-items: center;
-            gap: .5rem;
-            margin-bottom: .9rem;
+            gap: .68rem;
+            margin-bottom: 1.2rem;
             color: var(--brand);
-            font-size: .75rem;
+            font-size: 1rem;
             font-weight: 750;
-            letter-spacing: .12em;
+            letter-spacing: .16em;
             text-transform: uppercase;
         }
 
         .hero__mark {
-            width: .55rem;
-            height: .55rem;
+            width: .7rem;
+            height: .7rem;
             border-radius: 999px;
             background: var(--brand);
             box-shadow: 0 0 0 5px rgba(37, 99, 235, .10);
@@ -94,10 +109,40 @@ st.markdown(
         }
 
         .hero__benefits {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .25rem .65rem;
             color: var(--muted);
             font-size: .84rem;
             font-weight: 520;
             line-height: 1.7;
+        }
+
+        .hero__benefits span:not(:last-child)::after {
+            margin-left: .65rem;
+            color: #94A3B8;
+            content: "•";
+        }
+
+        [data-testid="stRadio"] [role="radiogroup"] {
+            display: flex;
+            flex-wrap: nowrap;
+            justify-content: center;
+            gap: .1rem;
+            padding: .22rem;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--surface);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, .07);
+        }
+
+        [data-testid="stRadio"] label {
+            margin: 0;
+            padding: .12rem .2rem;
+        }
+
+        [data-testid="stRadio"] label p {
+            font-size: 1.08rem;
         }
 
         .section-heading {
@@ -278,7 +323,9 @@ st.markdown(
         @media (max-width: 720px) {
             .block-container { padding: 1.75rem 1rem 3rem; }
             .hero { margin-bottom: 1.5rem; }
+            .hero__benefits { display: grid; gap: .15rem; }
             .hero__benefits span { display: block; }
+            .hero__benefits span:not(:last-child)::after { content: none; }
             [data-testid="stForm"] { padding: 1rem; border-radius: 14px; }
             [data-testid="stTextArea"] textarea { min-height: 560px; }
             .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -287,6 +334,89 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+if tema_escuro:
+    st.markdown(
+        """
+        <style>
+            :root {
+                --brand: #60A5FA;
+                --brand-dark: #3B82F6;
+                --ink: #F8FAFC;
+                --muted: #94A3B8;
+                --line: #263449;
+                --surface: #111C2E;
+                --surface-soft: #0B1423;
+                color-scheme: dark;
+            }
+
+            [data-testid="stAppViewContainer"] {
+                background:
+                    radial-gradient(circle at 10% -10%, rgba(59, 130, 246, .16), transparent 32rem),
+                    #07101E;
+                color: var(--ink);
+            }
+
+            [data-testid="stHeader"] { background: transparent; }
+            .hero__subtitle { color: #CBD5E1; }
+            .hero__benefits span:not(:last-child)::after { color: #52627A; }
+            .section-heading p { color: var(--muted); }
+
+            [data-testid="stTextInput"] label,
+            [data-testid="stTextArea"] label { color: #D7E0EC; }
+
+            [data-testid="stTextInput"] input,
+            [data-testid="stTextArea"] textarea {
+                border-color: #314158;
+                background: #0B1423;
+                color: #F8FAFC;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+            }
+
+            [data-testid="stTextInput"] input::placeholder,
+            [data-testid="stTextArea"] textarea::placeholder { color: #718096; }
+
+            [data-testid="stForm"] {
+                border-color: var(--line);
+                background: rgba(17, 28, 46, .94);
+                box-shadow: 0 16px 34px rgba(0, 0, 0, .20);
+            }
+
+            .stat-card,
+            [data-testid="stExpander"] {
+                border-color: var(--line);
+                background: var(--surface);
+                box-shadow: 0 6px 18px rgba(0, 0, 0, .16);
+            }
+
+            [data-testid="stExpander"] details summary:hover { background: #162237; }
+            [data-testid="stExpander"] details summary p { color: #E2E8F0; }
+
+            .prompt-text {
+                border-color: #263449;
+                background: var(--surface-soft);
+                color: #E2E8F0;
+            }
+
+            [data-testid="stDownloadButton"] button {
+                border-color: #314158;
+                background: var(--surface);
+                color: #E2E8F0;
+                box-shadow: 0 3px 9px rgba(0, 0, 0, .14);
+            }
+
+            [data-testid="stDownloadButton"] button:hover {
+                border-color: var(--brand);
+                color: var(--brand);
+            }
+
+            [data-testid="stRadio"] [role="radiogroup"] {
+                box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def formatar_tempo_interface(segundos: int) -> str:
@@ -298,22 +428,32 @@ def formatar_tempo_interface(segundos: int) -> str:
     return f"{minutos}:{segundos:02d}"
 
 
-def botao_copiar(texto: str, rotulo: str, chave: str, largura_total: bool = False) -> None:
+def botao_copiar(
+    texto: str,
+    rotulo: str,
+    chave: str,
+    largura_total: bool = False,
+    escuro: bool = False,
+) -> None:
     """Renderiza um botão de cópia isolado com fallback para navegadores antigos."""
     texto_json = json.dumps(texto, ensure_ascii=False).replace("</", "<\\/")
     largura = "100%" if largura_total else "auto"
+    fundo = "#111C2E" if escuro else "#FFFFFF"
+    fundo_hover = "#162237" if escuro else "#F8FAFF"
+    borda = "#314158" if escuro else "#CBD5E1"
+    cor = "#E2E8F0" if escuro else "#334155"
     componentes = f"""
     <style>
         * {{ box-sizing: border-box; }}
         body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }}
         button {{
             width: {largura}; min-height: 40px; padding: 0 15px;
-            border: 1px solid #CBD5E1; border-radius: 9px;
-            background: #FFFFFF; color: #334155; cursor: pointer;
+            border: 1px solid {borda}; border-radius: 9px;
+            background: {fundo}; color: {cor}; cursor: pointer;
             font-size: 13px; font-weight: 650;
             transition: border-color .18s ease, color .18s ease, background .18s ease;
         }}
-        button:hover {{ border-color: #2563EB; color: #2563EB; background: #F8FAFF; }}
+        button:hover {{ border-color: #60A5FA; color: #60A5FA; background: {fundo_hover}; }}
         button.copied {{ border-color: #16A34A; color: #15803D; background: #F0FDF4; }}
     </style>
     <button id="copy-{chave}" type="button">{html.escape(rotulo)}</button>
@@ -369,12 +509,12 @@ st.markdown(
         <div class="hero__eyebrow"><span class="hero__mark"></span>Segmentação profissional</div>
         <h1>Divisor de Roteiros</h1>
         <p class="hero__subtitle">
-            Transforme qualquer roteiro em segmentos de aproximadamente 8 segundos
+            Transforme qualquer roteiro em segmentos de 8 segundos
             preservando integralmente o texto original.
         </p>
         <div class="hero__benefits">
-            <span>✓ Texto preservado integralmente</span> &nbsp;•&nbsp;
-            <span>✓ Segmentação determinística</span> &nbsp;•&nbsp;
+            <span>✓ Texto preservado integralmente</span>
+            <span>✓ Segmentação determinística</span>
             <span>✓ Exportação em TXT, Markdown e CSV</span>
         </div>
     </header>
@@ -450,7 +590,13 @@ if "resultado" in st.session_state:
         f"<p>{len(segmentos)} segmentos prontos para uso.</p></div>",
         unsafe_allow_html=True,
     )
-    botao_copiar(conteudo_txt, "📋  Copiar tudo", "todos", largura_total=True)
+    botao_copiar(
+        conteudo_txt,
+        "📋  Copiar tudo",
+        "todos",
+        largura_total=True,
+        escuro=tema_escuro,
+    )
 
     for segmento in segmentos:
         inicio = formatar_tempo_interface(segmento["inicio_tempo"])
@@ -468,4 +614,5 @@ if "resultado" in st.session_state:
                 segmento["texto"],
                 "📋  Copiar",
                 f"prompt-{segmento['numero']}",
+                escuro=tema_escuro,
             )
