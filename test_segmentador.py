@@ -26,8 +26,24 @@ class SegmentadorTestes(unittest.TestCase):
         segmentador = Segmentador(texto, "06:40")
         segmentos = segmentador.dividir()
         tamanhos = [segmento["palavras"] for segmento in segmentos]
-        self.assertLessEqual(max(tamanhos), math.ceil(segmentador.media) + 4)
-        self.assertGreaterEqual(min(tamanhos), max(1, math.floor(segmentador.media) - 4))
+        self.assertLessEqual(max(tamanhos) - min(tamanhos), 1)
+        self.assertEqual({10, 11}, set(tamanhos))
+
+    def test_variancia_minima_com_pontuacao_atraente_distante(self) -> None:
+        texto = " ".join(
+            f"p{indice}." if indice in (2, 17) else f"p{indice}"
+            for indice in range(20)
+        )
+        tamanhos = [
+            item["palavras"] for item in Segmentador(texto, "00:24").dividir()
+        ]
+        self.assertEqual([6, 7, 7], sorted(tamanhos))
+
+    def test_extremos_so_ocorrem_quando_inevitaveis(self) -> None:
+        segmentos = Segmentador("uma duas tres", "00:40").dividir()
+        self.assertEqual(
+            [0, 0, 1, 1, 1], sorted(item["palavras"] for item in segmentos)
+        )
 
     def test_poucas_palavras_nao_duplica_tokens(self) -> None:
         segmentador = Segmentador("uma. duas?", "01:20")
@@ -36,9 +52,14 @@ class SegmentadorTestes(unittest.TestCase):
         self.assertEqual(["uma.", "duas?"], [token for item in segmentos for token in item["texto"].split()])
 
     def test_pontuacao_respeita_prioridade(self) -> None:
-        texto = "a b c, d e f. g h i j k l m n o p"
+        texto = "a b c d e f g, h. i j k l m n o p q"
         segmentos = Segmentador(texto, "00:16").dividir()
         self.assertTrue(segmentos[0]["texto"].endswith("."))
+
+    def test_pontuacao_distante_nao_cria_extremos(self) -> None:
+        texto = "a b c, d e f. g h i j k l m n o p"
+        segmentos = Segmentador(texto, "00:16").dividir()
+        self.assertEqual([8, 8], [item["palavras"] for item in segmentos])
 
     def test_timing_estimado_compensa_palavras_longas(self) -> None:
         texto = "extraordinariamente incompreensivelmente rapidamente sol luz mar céu paz fim"

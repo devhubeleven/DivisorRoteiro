@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import statistics
-from bisect import bisect_left
 from typing import Any
 
 from exportador import Exportador
@@ -15,7 +14,6 @@ class Segmentador:
     """Divide um roteiro sem alterar, remover ou reordenar seus tokens."""
 
     DURACAO_PROMPT = 8
-    JANELA_CORTE = 4
     PONTUACAO = (".", "?", "!", ":", ";", ",")
     CONECTORES = frozenset(
         {
@@ -104,33 +102,6 @@ class Segmentador:
             acumulados.append(acumulados[-1] + self._peso_token(token))
         return acumulados
 
-    def _candidatos(self, numero_corte: int, acumulados: list[float]) -> list[int]:
-        if numero_corte == 0:
-            return [0]
-        if numero_corte == self.total_prompts:
-            return [self.total_palavras]
-
-        alvo_peso = acumulados[-1] * numero_corte / self.total_prompts
-        ideal_audio = bisect_left(acumulados, alvo_peso)
-        ideal_palavras = (
-            2 * numero_corte * self.total_palavras + self.total_prompts
-        ) // (2 * self.total_prompts)
-
-        if self.total_palavras >= self.total_prompts:
-            minimo_global = numero_corte
-            maximo_global = self.total_palavras - (self.total_prompts - numero_corte)
-        else:
-            minimo_global = 0
-            maximo_global = self.total_palavras
-
-        candidatos: set[int] = set()
-        for ideal in (ideal_audio, ideal_palavras):
-            inicio = max(minimo_global, ideal - self.JANELA_CORTE)
-            fim = min(maximo_global, ideal + self.JANELA_CORTE)
-            candidatos.update(range(inicio, fim + 1))
-        candidatos.add(min(max(ideal_palavras, minimo_global), maximo_global))
-        return sorted(candidatos)
-
     @staticmethod
     def _normalizar_token(token: str) -> str:
         return token.strip(".,!?;:()[]{}\"'“”‘’—-").lower()
@@ -168,58 +139,74 @@ class Segmentador:
         return custo
 
     def _selecionar_limites(self) -> list[int]:
-        """Otimiza simultaneamente todos os cortes por programação dinâmica."""
+        """Minimiza globalmente a variância e então escolhe cortes naturais."""
         acumulados = self._pesos_acumulados()
         peso_medio = acumulados[-1] / self.total_prompts
-        candidatos_por_corte = [
-            self._candidatos(numero, acumulados)
-            for numero in range(self.total_prompts + 1)
-        ]
-        custos: dict[int, float] = {0: 0.0}
-        caminhos: list[dict[int, int]] = []
+        base, excedentes = divmod(self.total_palavras, self.total_prompts)
+        estados: dict[tuple[int, int], tuple[float, list[int]]] = {
+            (0, 0): (0.0, [0])
+        }
 
-        for numero in range(1, self.total_prompts + 1):
-            novos_custos: dict[int, float] = {}
-            predecessores: dict[int, int] = {}
-            for fim in candidatos_por_corte[numero]:
-                melhor: tuple[float, int] | None = None
-                for inicio, custo_anterior in custos.items():
-                    if fim < inicio or (self.total_palavras >= self.total_prompts and fim == inicio):
+        # Com soma e quantidade fixas, só floor(média) e ceil(média) produzem
+        # a variância mínima. A DP considera globalmente todas as suas ordens.
+        for numero in range(self.total_prompts):
+            proximos: dict[tuple[int, int], tuple[float, list[int]]] = {}
+            for (_, usados), (custo_anterior, limites) in estados.items():
+                tamanhos = [(base, usados)]
+                if usados < excedentes:
+                    tamanhos.append((base + 1, usados + 1))
+                for tamanho, novos_usados in tamanhos:
+                    restantes = self.total_prompts - numero - 1
+                    if excedentes - novos_usados > restantes:
                         continue
-                    palavras = fim - inicio
+                    inicio = limites[-1]
+                    fim = inicio + tamanho
                     peso = acumulados[fim] - acumulados[inicio]
                     desvio_peso = (peso - peso_medio) / max(peso_medio, 1e-9)
-                    desvio_palavras = (palavras - self.media) / max(self.media, 1.0)
                     custo = (
                         custo_anterior
-                        + 22.0 * desvio_peso * desvio_peso
-                        + 5.0 * desvio_palavras * desvio_palavras
+                        + 2.0 * desvio_peso * desvio_peso
                         + self._custo_corte(fim)
                     )
-                    opcao = (custo, inicio)
-                    if melhor is None or opcao < melhor:
-                        melhor = opcao
-                if melhor is not None:
-                    novos_custos[fim] = melhor[0]
-                    predecessores[fim] = melhor[1]
-            if not novos_custos:
-                raise RuntimeError("Não foi possível construir uma segmentação válida.")
-            custos = novos_custos
-            caminhos.append(predecessores)
+                    chave = (numero + 1, novos_usados)
+                    candidato = (custo, limites + [fim])
+                    atual = proximos.get(chave)
+                    if atual is None or candidato < atual:
+                        proximos[chave] = candidato
+            estados = proximos
+        return estados[(self.total_prompts, excedentes)][1]
 
-        limite = self.total_palavras
-        limites = [limite]
-        for predecessores in reversed(caminhos):
-            limite = predecessores[limite]
-            limites.append(limite)
-        limites.reverse()
-        return limites
+    def _rebalancear(self, limites: list[int]) -> list[int]:
+        """Transfere fronteiras adjacentes enquanto a variância diminuir."""
+        limites = limites.copy()
+        while True:
+            tamanhos = [b - a for a, b in zip(limites, limites[1:])]
+            soma_atual = sum((t - self.media) ** 2 for t in tamanhos)
+            melhor: tuple[float, float, int, int] | None = None
+            for corte in range(1, len(limites) - 1):
+                for deslocamento in (-1, 1):
+                    novo = limites[corte] + deslocamento
+                    minimo = 1 if self.total_palavras >= self.total_prompts else 0
+                    if (novo - limites[corte - 1] < minimo or
+                            limites[corte + 1] - novo < minimo):
+                        continue
+                    candidatos = tamanhos.copy()
+                    candidatos[corte - 1] += deslocamento
+                    candidatos[corte] -= deslocamento
+                    soma = sum((t - self.media) ** 2 for t in candidatos)
+                    if soma < soma_atual - 1e-12:
+                        opcao = (soma, self._custo_corte(novo), corte, deslocamento)
+                        if melhor is None or opcao < melhor:
+                            melhor = opcao
+            if melhor is None:
+                return limites
+            limites[melhor[2]] += melhor[3]
 
     def dividir(self) -> list[dict[str, Any]]:
         """Gera os prompts, valida sua integridade e retorna os segmentos."""
         self._preparar()
         self.segmentos = []
-        limites = self._selecionar_limites()
+        limites = self._rebalancear(self._selecionar_limites())
 
         for indice in range(self.total_prompts):
             numero = indice + 1
