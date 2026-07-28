@@ -8,9 +8,9 @@ Aplicação Python e Streamlit para dividir um roteiro, de forma totalmente dete
 2. A quantidade de prompts é `ceil(segundos / 8)`.
 3. O roteiro é tokenizado exclusivamente com `texto.split()`.
 4. Cada token recebe um peso determinístico de fala baseado em grupos vocálicos, extensão da palavra e pausas de pontuação.
-5. A otimização global minimiza primeiro a variância do número de palavras. Sempre que matematicamente possível, os segmentos diferem por no máximo uma palavra.
-6. Entre todas as distribuições de variância mínima, uma programação dinâmica escolhe conjuntamente a ordem dos tamanhos que melhor preserva pontuação, transições, construções contínuas e ritmo de fala.
-7. Uma etapa final de rebalanceamento transfere fronteiras adjacentes sempre que isso reduz a variância, eliminando segmentos extremamente curtos ou longos.
+5. A média de palavras define uma janela ampla de busca, não um tamanho obrigatório para cada segmento.
+6. Uma programação dinâmica examina todas as quebras possíveis nessa janela e prioriza pontuação, transições e ideias completas. Distância da média e ritmo estimado recebem apenas penalizações moderadas.
+7. Uma etapa final de rebalanceamento atua somente sobre segmentos fora da faixa aceitável, evitando extremos sem desfazer boas quebras naturais.
 8. A saída é validada token a token e por continuidade de índices e tempos.
 
 O algoritmo nunca corrige, reescreve, remove, duplica ou move tokens. Espaços em branco do texto de entrada são normalizados ao exibir os prompts, consequência direta da tokenização exigida por `split()`; o conteúdo e a ordem de cada token permanecem idênticos.

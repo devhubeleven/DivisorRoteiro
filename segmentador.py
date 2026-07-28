@@ -139,63 +139,68 @@ class Segmentador:
         return custo
 
     def _selecionar_limites(self) -> list[int]:
-        """Minimiza globalmente a variância e então escolhe cortes naturais."""
+        """Escolhe globalmente as melhores quebras dentro da faixa aceitável."""
         acumulados = self._pesos_acumulados()
         peso_medio = acumulados[-1] / self.total_prompts
-        base, excedentes = divmod(self.total_palavras, self.total_prompts)
-        estados: dict[tuple[int, int], tuple[float, list[int]]] = {
-            (0, 0): (0.0, [0])
-        }
+        minimo, maximo = self._faixa_tamanho()
+        estados: dict[int, tuple[float, list[int]]] = {0: (0.0, [0])}
 
-        # Com soma e quantidade fixas, só floor(média) e ceil(média) produzem
-        # a variância mínima. A DP considera globalmente todas as suas ordens.
-        for numero in range(self.total_prompts):
-            proximos: dict[tuple[int, int], tuple[float, list[int]]] = {}
-            for (_, usados), (custo_anterior, limites) in estados.items():
-                tamanhos = [(base, usados)]
-                if usados < excedentes:
-                    tamanhos.append((base + 1, usados + 1))
-                for tamanho, novos_usados in tamanhos:
-                    restantes = self.total_prompts - numero - 1
-                    if excedentes - novos_usados > restantes:
+        # Cada estado considera todas as fronteiras da janela, e não somente
+        # posições próximas de um corte ideal ou uma decisão gulosa anterior.
+        for numero in range(1, self.total_prompts + 1):
+            proximos: dict[int, tuple[float, list[int]]] = {}
+            restantes = self.total_prompts - numero
+            for inicio, (custo_anterior, limites) in estados.items():
+                menor_fim = inicio + minimo
+                maior_fim = min(inicio + maximo, self.total_palavras)
+                for fim in range(menor_fim, maior_fim + 1):
+                    palavras_restantes = self.total_palavras - fim
+                    if not restantes * minimo <= palavras_restantes <= restantes * maximo:
                         continue
-                    inicio = limites[-1]
-                    fim = inicio + tamanho
+                    tamanho = fim - inicio
                     peso = acumulados[fim] - acumulados[inicio]
                     desvio_peso = (peso - peso_medio) / max(peso_medio, 1e-9)
-                    custo = (
-                        custo_anterior
-                        + 2.0 * desvio_peso * desvio_peso
-                        + self._custo_corte(fim)
-                    )
-                    chave = (numero + 1, novos_usados)
+                    desvio_palavras = (tamanho - self.media) / max(self.media, 1.0)
+                    # A pontuação linguística domina. Os desvios de tamanho e
+                    # ritmo são penalizações moderadas, usadas para desempatar
+                    # quebras naturais de qualidade semelhante.
+                    custo = custo_anterior + self._custo_corte(fim)
+                    custo += 2.0 * desvio_palavras**2 + 0.5 * desvio_peso**2
                     candidato = (custo, limites + [fim])
-                    atual = proximos.get(chave)
+                    atual = proximos.get(fim)
                     if atual is None or candidato < atual:
-                        proximos[chave] = candidato
+                        proximos[fim] = candidato
             estados = proximos
-        return estados[(self.total_prompts, excedentes)][1]
+        return estados[self.total_palavras][1]
+
+    def _faixa_tamanho(self) -> tuple[int, int]:
+        """Retorna uma janela ampla, viável e centrada na média."""
+        if self.total_palavras < self.total_prompts:
+            return 0, 1
+        minimo = max(1, math.floor(self.media * 0.6))
+        maximo = max(math.ceil(self.media), math.ceil(self.media * 1.4))
+        # Garante que a soma total sempre caiba na faixa escolhida.
+        minimo = min(minimo, math.floor(self.media))
+        maximo = max(maximo, math.ceil(self.media))
+        return minimo, maximo
 
     def _rebalancear(self, limites: list[int]) -> list[int]:
-        """Transfere fronteiras adjacentes enquanto a variância diminuir."""
+        """Corrige apenas tamanhos extremos, preservando as quebras naturais."""
         limites = limites.copy()
+        minimo, maximo = self._faixa_tamanho()
         while True:
             tamanhos = [b - a for a, b in zip(limites, limites[1:])]
-            soma_atual = sum((t - self.media) ** 2 for t in tamanhos)
-            melhor: tuple[float, float, int, int] | None = None
+            melhor: tuple[int, float, int, int] | None = None
             for corte in range(1, len(limites) - 1):
                 for deslocamento in (-1, 1):
                     novo = limites[corte] + deslocamento
-                    minimo = 1 if self.total_palavras >= self.total_prompts else 0
-                    if (novo - limites[corte - 1] < minimo or
-                            limites[corte + 1] - novo < minimo):
-                        continue
                     candidatos = tamanhos.copy()
                     candidatos[corte - 1] += deslocamento
                     candidatos[corte] -= deslocamento
-                    soma = sum((t - self.media) ** 2 for t in candidatos)
-                    if soma < soma_atual - 1e-12:
-                        opcao = (soma, self._custo_corte(novo), corte, deslocamento)
+                    extremos_antes = sum(t < minimo or t > maximo for t in tamanhos)
+                    extremos_depois = sum(t < minimo or t > maximo for t in candidatos)
+                    if extremos_depois < extremos_antes:
+                        opcao = (extremos_depois, self._custo_corte(novo), corte, deslocamento)
                         if melhor is None or opcao < melhor:
                             melhor = opcao
             if melhor is None:
